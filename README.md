@@ -12,6 +12,12 @@ Make
 ### How to use:
 ./KQM2801AI
 
-#### Result:
-RAW : 0x5f 0x00 0x01 0x60
-Density = 0.1 PPM level:Green
+### Result:
+RAW : 0x5f 0x00 0x03 0x62
+Density = 0.3 PPM level:Clean
+
+### Density
+- 00 level <2PPM  		Clean
+- 01 level 2 ~ 8 PPM 	Good
+- 02 level 8 ~ 15PPM 	Bad
+- 03 level > 15PPM 		Danger

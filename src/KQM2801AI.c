@@ -28,23 +28,6 @@
 
 
 /*
- * delay:
- *	Wait for some number of milliseconds
- *********************************************************************************
- */
-
-void delay (unsigned int howLong)
-{
-  struct timespec sleeper, dummy ;
-
-  sleeper.tv_sec  = (time_t)(howLong / 1000) ;
-  sleeper.tv_nsec = (long)(howLong % 1000) * 1000000 ;
-
-  nanosleep (&sleeper, &dummy) ;
-}
-
-
-/*
  * kqm2801_open:
  *	Open a file pointer to the appropiate I2C buss and kqm2801 address
  *********************************************************************************
@@ -81,14 +64,14 @@ int kqm2801_close(int fp)
  *********************************************************************************
  */
 
-kqm2801rtn writeandread(int fp, uint16_t sndword, uint8_t *buffer, int readsize)
+kqm2801rtn kqm2801_writeandread(int fp, uint8_t *buffer, int readsize)
 {
   int rtn;
   int sendsize = 2;
   uint8_t snd[sendsize];
 
   if (readsize > 0) {
-    delay(10);
+    usleep(10);
     rtn = read(fp, buffer, readsize);
     if ( rtn < readsize) {
       return KQM2801_READ_FAILED;
@@ -112,23 +95,36 @@ kqm2801rtn getDensity( float *density,char *level)
 
   file = kqm2801_open(KQM2801_INTERFACE_ADDR, KQM2801_DEFAULT_ADDR);
   
-  rtn = writeandread(file, SHT32_DEFAULT_READ, buf, 8);
+  rtn = kqm2801_writeandread(file, buf, 8);
   kqm2801_close(file);
 
   if (rtn != KQM2801_OK)
     return rtn;
   else {
-    /* PPM */
-    *density = 0.1 * ((float) (buf[1]+buf[2]));
- 
-    if( *density < 2 )
-      strcat(level,"Green"); //0
-    else if( *density <= 8)
-      strcat(level,"Yellow"); //1;
-    else if( *density <= 15)
-      strcat(level,"Orange");
-    else if( *density > 15)
-      strcat(level,"Red");
+    if( buf[0] == 0x5f){  //pass
+  
+      if( buf[1] == 0xff && buf[2] == 0xff ){  //wait for the module preheat
+        *density = 0;
+        sprintf(level,"Wait");
+      }
+      else{
+        /* PPM */
+        *density = 0.1 * ((float) (buf[1]+buf[2]));
+
+        /* decide level */
+        if( *density < 2 )
+          sprintf(level,"Clean"); //0
+        else if( *density <= 8)
+          sprintf(level,"Good"); //1;
+        else if( *density <= 15)
+          sprintf(level,"Bad");
+        else if( *density > 15)
+          sprintf(level,"Dange");  //Danger
+      }
+    }
+    else{
+      sprintf(level,"Error");
+    }
 
     /* check sum */
     if((buf[0]+buf[1]+buf[2]) != buf[3] )
@@ -138,14 +134,6 @@ kqm2801rtn getDensity( float *density,char *level)
   return KQM2801_OK;
 }
 
-void printusage(char *selfname)
-{
-  printf("%s (options)\n", selfname);
-  printf("\ts - print status\n");
-  printf("\tp - print temp & humid\n");
-  printf("\t-h this\n\n");
-  printf("Example to print temperaturehum & humidity, serial number & status\n  %s p n s\n\n", selfname);
-}
 
 int display()
 {
@@ -174,9 +162,7 @@ int main(int argc, char *argv[])
 
   if (argc <= 1) {
     sleep(1);
-
     display();
-
     exit (EXIT_SUCCESS);
   }
   
@@ -184,13 +170,11 @@ int main(int argc, char *argv[])
   {
     if (strcmp (argv[i], "-h") == 0)
     {
-      printusage(argv[0]);
       exit (EXIT_SUCCESS);
     }  else {
       printf("ERROR :- '%s' unknown option\n",argv[i]);
     }
       
-    delay(30);
   }
   
   return 0;
